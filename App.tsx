@@ -2,16 +2,17 @@
 import React, { useState } from 'react';
 import { 
   LayoutDashboard, Tag, PlusCircle, BarChart3, History, 
-  Menu, Bell, ChevronDown 
+  Menu, Bell, ChevronDown, ImagePlus 
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import CouponList from './components/CouponList';
 import CreateCouponWizard from './components/CreateCouponWizard';
 import Analytics from './components/Analytics';
-import HistorySection from './components/StudioRequests'; // Repurposed as History
+import HistorySection from './components/StudioRequests';
+import BannerUpload from './components/BannerUpload';
 import { Coupon, CouponStatus, CouponCategory, DiscountType, AudienceType, CouponFormData } from './types';
 
-type Tab = 'dashboard' | 'coupons' | 'create' | 'analytics' | 'history';
+type Tab = 'dashboard' | 'coupons' | 'create' | 'banners' | 'analytics' | 'history';
 
 // Initial Mock Data moved to App level
 const INITIAL_COUPONS: Coupon[] = [
@@ -74,49 +75,103 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [coupons, setCoupons] = useState<Coupon[]>(INITIAL_COUPONS);
+  const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
 
-  const handleCreateCoupon = (formData: CouponFormData) => {
-    const newCoupon: Coupon = {
-      id: Math.random().toString(36).substr(2, 9),
-      code: formData.code,
-      title: formData.title,
-      description: formData.description,
-      category: formData.category,
-      discountType: formData.discountType,
-      discountValue: formData.discountValue,
-      maxDiscount: formData.maxDiscount,
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      usageCount: 0,
-      usageLimit: formData.globalRedemptionLimit,
-      status: formData.status,
-      audience: formData.audience,
-      studioName: formData.selectedStudio,
-      serviceName: formData.selectedServices.join(', '),
-      minOrderValue: formData.minOrderValue,
-      terms: formData.terms,
-      maxUsesPerUser: formData.maxUsesPerUser,
-      isFirstLogin: formData.isFirstLogin,
-      allowStacking: formData.allowStacking
-    };
+  const handleSaveCoupon = (formData: CouponFormData) => {
+    if (editingCoupon) {
+      // Update existing coupon
+      setCoupons(prev => prev.map(c => c.id === editingCoupon.id ? {
+        ...c,
+        ...formData, // Spread form data
+        // Explicitly map special fields that differ
+        serviceName: formData.selectedServices.join(', '),
+        studioName: formData.selectedStudio,
+        usageLimit: formData.globalRedemptionLimit,
+        id: c.id // Keep original ID
+      } : c));
+      
+      // We don't immediately clear editingCoupon here because the wizard shows a success screen.
+      // The wizard handles the "Return to List" action which should ideally trigger a cleanup.
+      // But for now, we'll let the user navigate manually or via the button in Wizard.
+    } else {
+      // Create new coupon
+      const newCoupon: Coupon = {
+        id: Math.random().toString(36).substr(2, 9),
+        code: formData.code,
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        discountType: formData.discountType,
+        discountValue: formData.discountValue,
+        maxDiscount: formData.maxDiscount,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        usageCount: 0,
+        usageLimit: formData.globalRedemptionLimit,
+        status: formData.status,
+        audience: formData.audience,
+        studioName: formData.selectedStudio,
+        serviceName: formData.selectedServices.join(', '),
+        minOrderValue: formData.minOrderValue,
+        terms: formData.terms,
+        maxUsesPerUser: formData.maxUsesPerUser,
+        isFirstLogin: formData.isFirstLogin,
+        allowStacking: formData.allowStacking
+      };
+      setCoupons(prev => [newCoupon, ...prev]);
+    }
+  };
 
-    setCoupons(prev => [newCoupon, ...prev]);
+  const handleDeleteCoupon = (id: string) => {
+    // In a real app, this might be a soft delete or an API call.
+    // For this demo, we move it to inactive/deleted state visually by updating status
+    setCoupons(prev => prev.map(c => c.id === id ? { ...c, status: CouponStatus.INACTIVE } : c));
+  };
+
+  const handleEditCoupon = (coupon: Coupon) => {
+    setEditingCoupon(coupon);
+    setActiveTab('create');
+  };
+
+  const handleCreateNew = () => {
+    setEditingCoupon(null);
+    setActiveTab('create');
+  };
+
+  const handleUpdateCouponBanner = (couponId: string, bannerUrl: string) => {
+    setCoupons(prev => prev.map(c => 
+      c.id === couponId ? { ...c, bannerUrl } : c
+    ));
   };
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard />;
-      case 'coupons': return <CouponList coupons={coupons} />;
-      case 'create': return <CreateCouponWizard onCreate={handleCreateCoupon} />;
+      case 'coupons': 
+        return <CouponList 
+          coupons={coupons} 
+          onEdit={handleEditCoupon} 
+          onDelete={handleDeleteCoupon} 
+        />;
+      case 'create': 
+        return <CreateCouponWizard 
+          onCreate={handleSaveCoupon} 
+          initialData={editingCoupon}
+          isEditing={!!editingCoupon}
+        />;
+      case 'banners': return <BannerUpload coupons={coupons} onUpdate={handleUpdateCouponBanner} />;
       case 'analytics': return <Analytics />;
       case 'history': return <HistorySection coupons={coupons} />;
       default: return <Dashboard />;
     }
   };
 
-  const NavItem = ({ tab, icon: Icon, label }: { tab: Tab, icon: any, label: string }) => (
+  const NavItem = ({ tab, icon: Icon, label, onClick }: { tab: Tab, icon: any, label: string, onClick?: () => void }) => (
     <button
-      onClick={() => setActiveTab(tab)}
+      onClick={onClick ? onClick : () => {
+        if (tab === 'create') setEditingCoupon(null); // Reset edit state when clicking Create sidebar
+        setActiveTab(tab);
+      }}
       className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors rounded-lg ${
         activeTab === tab 
           ? 'bg-brand-50 text-brand-700' 
@@ -144,7 +199,8 @@ const App: React.FC = () => {
           <div className="pt-4 pb-2">
             {isSidebarOpen && <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Offers</p>}
             <NavItem tab="coupons" icon={Tag} label="All Coupons" />
-            <NavItem tab="create" icon={PlusCircle} label="Create New" />
+            <NavItem tab="create" icon={PlusCircle} label="Create New" onClick={handleCreateNew} />
+            <NavItem tab="banners" icon={ImagePlus} label="Upload Banners" />
             <NavItem tab="history" icon={History} label="History" />
           </div>
           <div className="pt-4 border-t border-slate-100">
@@ -169,7 +225,8 @@ const App: React.FC = () => {
           <h1 className="text-lg font-semibold text-slate-700">
             {activeTab === 'dashboard' && 'Dashboard'}
             {activeTab === 'coupons' && 'All Coupons'}
-            {activeTab === 'create' && 'Create Offer'}
+            {activeTab === 'create' && (editingCoupon ? 'Edit Offer' : 'Create Offer')}
+            {activeTab === 'banners' && 'Upload Banners'}
             {activeTab === 'analytics' && 'Analytics'}
             {activeTab === 'history' && 'Offer History'}
           </h1>

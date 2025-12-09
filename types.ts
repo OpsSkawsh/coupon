@@ -49,6 +49,8 @@ export interface Coupon {
   maxUsesPerUser?: number;
   isFirstLogin?: boolean;
   allowStacking?: boolean;
+  // New field for Banner
+  bannerUrl?: string;
 }
 
 export interface CouponFormData {

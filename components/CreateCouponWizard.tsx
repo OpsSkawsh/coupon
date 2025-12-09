@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ChevronRight, Check, Wand2, AlertCircle, Phone, ArrowLeft, Plus, Trash2, CheckCircle2, RotateCcw, MapPin, ShoppingBag, Lock, Ticket, Tag, Info, X
 } from 'lucide-react';
-import { CouponFormData, CouponCategory, AudienceType, DiscountType, CouponStatus } from '../types';
+import { CouponFormData, CouponCategory, AudienceType, DiscountType, CouponStatus, Coupon } from '../types';
 
 // --- SHARED TYPES & CONSTANTS ---
 
@@ -702,9 +702,11 @@ const MobilePreview: React.FC<{ data: CouponFormData }> = ({ data }) => {
 
 interface CreateCouponWizardProps {
   onCreate: (data: CouponFormData) => void;
+  initialData?: Coupon | null;
+  isEditing?: boolean;
 }
 
-const CreateCouponWizard: React.FC<CreateCouponWizardProps> = ({ onCreate }) => {
+const CreateCouponWizard: React.FC<CreateCouponWizardProps> = ({ onCreate, initialData, isEditing = false }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<CouponFormData>(INITIAL_DATA);
   const [autoSaving, setAutoSaving] = useState(false);
@@ -713,6 +715,36 @@ const CreateCouponWizard: React.FC<CreateCouponWizardProps> = ({ onCreate }) => 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessView, setShowSuccessView] = useState(false);
   const [submittedData, setSubmittedData] = useState<CouponFormData | null>(null);
+
+  // Load Initial Data for Editing
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        title: initialData.title,
+        description: initialData.description,
+        category: initialData.category,
+        audience: initialData.audience,
+        code: initialData.code,
+        discountType: initialData.discountType,
+        discountValue: initialData.discountValue,
+        maxDiscount: initialData.maxDiscount || 0,
+        minOrderValue: initialData.minOrderValue || 0,
+        applyOn: initialData.category === CouponCategory.SERVICE_BASED ? 'SERVICE' : 'ORDER',
+        selectedServices: initialData.serviceName ? initialData.serviceName.split(', ') : [],
+        selectedStudio: initialData.studioName || '',
+        isFirstLogin: initialData.isFirstLogin || false,
+        terms: initialData.terms || '',
+        maxUsesPerUser: initialData.maxUsesPerUser || 1,
+        globalRedemptionLimit: initialData.usageLimit,
+        allowStacking: initialData.allowStacking || false,
+        startDate: initialData.startDate,
+        endDate: initialData.endDate,
+        status: initialData.status
+      });
+    } else {
+      setFormData(INITIAL_DATA);
+    }
+  }, [initialData]);
 
   // Simulate Auto-save
   useEffect(() => {
@@ -748,7 +780,7 @@ const CreateCouponWizard: React.FC<CreateCouponWizardProps> = ({ onCreate }) => 
     
     // Simulate Backend API Call
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Call Parent to Add Coupon
       onCreate(formData);
@@ -756,10 +788,13 @@ const CreateCouponWizard: React.FC<CreateCouponWizardProps> = ({ onCreate }) => 
       // On Success
       setSubmittedData(formData);
       setShowSuccessView(true);
-      setFormData(INITIAL_DATA); // Reset form for next use
-      setCurrentStep(0);
+      // Don't reset form immediately if editing to allow them to see what they saved
+      if (!isEditing) {
+        setFormData(INITIAL_DATA); 
+        setCurrentStep(0);
+      }
     } catch (error) {
-      alert("Failed to create coupon. Please try again.");
+      alert("Failed to save coupon. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -791,16 +826,20 @@ const CreateCouponWizard: React.FC<CreateCouponWizardProps> = ({ onCreate }) => 
           <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6">
             <CheckCircle2 className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Coupon Created Successfully!</h2>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">{isEditing ? 'Coupon Updated Successfully!' : 'Coupon Created Successfully!'}</h2>
           <p className="text-slate-500 max-w-md mb-8">
-            The coupon <span className="font-mono font-bold text-slate-700">{submittedData?.code}</span> is now active and live. You can view the mobile preview on the right panel.
+            The coupon <span className="font-mono font-bold text-slate-700">{submittedData?.code}</span> has been {isEditing ? 'updated' : 'published'} and is now live.
           </p>
           <div className="flex gap-4">
              <button 
                onClick={handleStartFresh}
                className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors"
              >
-               <Plus className="w-4 h-4" /> Create Another Coupon
+               {isEditing ? (
+                 <>Return to List</>
+               ) : (
+                 <><Plus className="w-4 h-4" /> Create Another Coupon</>
+               )}
              </button>
           </div>
         </div>
@@ -825,7 +864,7 @@ const CreateCouponWizard: React.FC<CreateCouponWizardProps> = ({ onCreate }) => 
         {/* Stepper Header */}
         <div className="p-6 border-b border-slate-200">
            <div className="flex justify-between items-center mb-6">
-             <h2 className="text-xl font-bold text-slate-800">Create New Coupon</h2>
+             <h2 className="text-xl font-bold text-slate-800">{isEditing ? `Edit Coupon: ${initialData?.code}` : 'Create New Coupon'}</h2>
              <div className="text-xs text-slate-400 flex items-center gap-2">
                 {autoSaving && <span className="flex items-center text-brand-600"><Wand2 className="w-3 h-3 mr-1 animate-spin" /> Auto-saving...</span>}
              </div>
@@ -872,7 +911,7 @@ const CreateCouponWizard: React.FC<CreateCouponWizardProps> = ({ onCreate }) => 
              {isSubmitting ? (
                <>Processing...</>
              ) : currentStep === STEPS.length - 1 ? (
-               'Finish & Create'
+               isEditing ? 'Update Coupon' : 'Finish & Create'
              ) : (
                <>Next Step <ChevronRight className="w-4 h-4" /></>
              )}
